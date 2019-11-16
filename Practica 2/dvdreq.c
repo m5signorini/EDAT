@@ -20,7 +20,6 @@ int main(int argc, char** argv) {
   char param_2[512];
 
 
-
   /* CHECK COMMAND LINE */
   if(argc < 2) {
     fprintf(stderr, "Error en los parametros de entrada, escribe una de las siguientes opciones:\n\n");
@@ -232,9 +231,12 @@ int film_query(char* f_title) {
     /* QUERY 2 - ACTORES */
     sprintf(query_2, "SELECT actor.first_name, actor.last_name "
                     "FROM actor, film_actor "
-                    "WHERE film_actor.film_id = %s and "
-                          "film_actor.actor_id = actor.actor_id;", film_id_1);
-    SQLExecDirect(stmt_2, (SQLCHAR*) query_2, SQL_NTS);
+                    "WHERE film_actor.film_id = ? and "
+                          "film_actor.actor_id = actor.actor_id;");
+
+    SQLPrepare(stmt_2, (SQLCHAR*) query_2, SQL_NTS);
+    SQLBindParameter(stmt_2, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id_1, 0, NULL);
+    SQLExecute(stmt_2);
     SQLBindCol(stmt_2, 1, SQL_C_CHAR, first_name, sizeof(first_name), NULL);
     SQLBindCol(stmt_2, 2, SQL_C_CHAR, last_name, sizeof(last_name), NULL);
     while(SQL_SUCCEEDED(ret = SQLFetch(stmt_2))) {
@@ -297,15 +299,19 @@ int rent_query(char* c_id, char* d_1, char* d_2) {
 	                        "inventory.film_id = film.film_id and "
 	                        "rental.staff_id = staff.staff_id and "
 	                        "staff.store_id = store.store_id and "
-	                        "rental.rental_date >= '%s' and "
-                          "rental.rental_date <= '%s' and "
+	                        "rental.rental_date >= ? and "
+                          "rental.rental_date <= ? and "
 	                        "payment.rental_id = rental.rental_id and "
-	                        "customer.customer_id = %s "
-                          "ORDER BY rental.rental_date;", d_1, d_2, c_id);
+	                        "customer.customer_id = ? "
+                          "ORDER BY rental.rental_date;");
+
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, d_1, 0, NULL);
+  SQLBindParameter(stmt, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, d_2, 0, NULL);
+  SQLBindParameter(stmt, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, c_id, 0, NULL);
+  SQLExecute(stmt);
 
   /*printf("%s\n", query_1);*/
-
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
   SQLBindCol(stmt, 2, SQL_C_CHAR, rental_date, sizeof(rental_date), NULL);
@@ -351,7 +357,7 @@ int recommend_query(char* customer_id) {
   SQLHDBC dbc;
   SQLHSTMT stmt;
   SQLRETURN ret; /* ODBC API return status */
-  char query[2048];
+  char query[1024];
 
   SQLCHAR film_id[512];
   SQLCHAR title[512];
@@ -376,14 +382,24 @@ int recommend_query(char* customer_id) {
   	                    "inventory.film_id = film.film_id and "
   	                    "film_category.film_id = film.film_id and "
   	                    "category.category_id = film_category.category_id and "
-  	                    "customer.customer_id = %s "
-                 "GROUP BY category.category_id; ", customer_id);
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+  	                    "customer.customer_id = ? "
+                 "GROUP BY category.category_id; ");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, customer_id, 0, NULL);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
+
+  /*if(!SQL_SUCCEEDED(ret = SQLFetch(stmt))) {
+    fprintf(stderr, "Error\n");
+  }*/
 
   sprintf(query, "CREATE VIEW MaxCategory AS "
                  "SELECT category_id "
                  "FROM CountCategory "
                  "WHERE C = (SELECT MAX(C) FROM CountCategory);");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
 
   sprintf(query, "CREATE VIEW NotRentedByCust AS "
                  "SELECT film.film_id "
@@ -394,7 +410,11 @@ int recommend_query(char* customer_id) {
   			                                      "WHERE customer.customer_id =rental.customer_id and "
   				                                           "inventory.inventory_id = rental.inventory_id and "
   				                                           "inventory.film_id = film.film_id and "
-  				                                           "customer.customer_id = %s);", customer_id);
+  				                                           "customer.customer_id = ?);");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, customer_id, 0, NULL);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
 
   sprintf(query, "CREATE VIEW MostRentedFilms AS "
                 "SELECT COUNT(*) AS D, NotRentedByCust.film_id "
@@ -405,14 +425,16 @@ int recommend_query(char* customer_id) {
   	                   "MaxCategory.category_id = film_category.category_id and "
   	                   "NotRentedByCust.film_id = film_category.film_id "
                 "GROUP BY NotRentedByCust.film_id;");
-
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
 
   sprintf(query,"SELECT film.film_id, film.title "
                 "FROM film, MostRentedFilms "
                 "WHERE film.film_id = MostRentedFilms.film_id "
                 "ORDER BY D DESC LIMIT 3;");
-
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, film_id, sizeof(film_id), NULL);
   SQLBindCol(stmt, 2, SQL_C_CHAR, title, sizeof(title), NULL);
@@ -428,12 +450,24 @@ int recommend_query(char* customer_id) {
 
   SQLCloseCursor(stmt);
 
-  sprintf(query,    "DROP VIEW MostRentedFilms; "
-                    "DROP VIEW NotRentedByCust; "
-                    "DROP VIEW MaxCategory; "
-                    "DROP VIEW CountCategory;");
+  sprintf(query, "DROP VIEW MostRentedFilms;");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
 
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+  sprintf(query, "DROP VIEW NotRentedByCust;");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
+
+  sprintf(query, "DROP VIEW MaxCategory;");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
+  SQLCloseCursor(stmt);
+
+  sprintf(query, "DROP VIEW CountCategory;");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLExecute(stmt);
   SQLCloseCursor(stmt);
 
   /* free up statement handle */
