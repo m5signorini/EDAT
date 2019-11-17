@@ -6,6 +6,7 @@
 #include "odbc.h"
 
 int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am);
+int remove_rent(char* r_id);
 
 /* c_id = customer_id, f_id = film_id, s_id = staff_id,
    st_id = store_id, am = amount */
@@ -45,7 +46,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
     /* If the customer does not exist we cannot add the rent */
     if(!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "EXIT_FAILURE: customer not found.\n");
+      fprintf(stdout, "ERROR: customer not found.\n");
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
@@ -71,7 +72,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     ret = SQLFetch(stmt);
 
     if (!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: film_id %s not found or not available for rent\n", f_id);
+      fprintf(stdout, "ERROR: film_id %s not found or not available for rent.\n", f_id);
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
@@ -95,7 +96,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     ret = SQLFetch(stmt);
 
     if (!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: store_id %s not match with the staff with id %s\n", st_id, s_id);
+      fprintf(stdout, "ERROR: store_id %s not match with the staff with id %s.\n", st_id, s_id);
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
@@ -119,7 +120,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     ret = SQLFetch(stmt);
 
     if (!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: store_id %s not match with the customer with id %s\n", st_id, c_id);
+      fprintf(stdout, "ERROR: store_id %s not match with the customer with id %s.\n", st_id, c_id);
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
@@ -138,7 +139,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
     if(!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: rental could not be done.\n");
+      fprintf(stdout, "ERROR: rent could not be done.\n");
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
@@ -150,7 +151,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
     SQLCloseCursor(stmt);
 
-    /* We obtain the rental_id of the rental we have just done */
+    /* We obtain the rental_id of the rent we have just done */
     sprintf(query, "SELECT rental.rental_id "
                     "FROM rental "
                     "ORDER BY rental.rental_id DESC;");
@@ -178,6 +179,99 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
     if(!SQL_SUCCEEDED(ret)){
       fprintf(stdout, "ERROR: payment could not be processed.\n");
+      SQLCloseCursor(stmt);
+      SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+      ret = odbc_disconnect(env, dbc);
+      if(!SQL_SUCCEEDED(ret)) {
+        return EXIT_FAILURE;
+      }
+      return EXIT_FAILURE;
+    }
+
+    SQLCloseCursor(stmt);
+    /* Free up statement handle */
+    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+
+    /* DISCONNECT */
+    ret = odbc_disconnect(env, dbc);
+    if(!SQL_SUCCEEDED(ret)) {
+      return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+ }
+
+
+ int remove_rent(char* r_id){
+
+   SQLHENV env;
+   SQLHDBC dbc;
+   SQLHSTMT stmt;
+   SQLRETURN ret; /* ODBC API return status */
+   char query[1024];
+
+   SQLCHAR rental_id[512];
+
+   ret = odbc_connect(&env, &dbc);
+   if (!SQL_SUCCEEDED(ret)){
+     return EXIT_FAILURE;
+   }
+
+   /* Allocate a statement handle */
+   SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
+
+   /* First we check that in fact the rent we want to remove
+      has been done at any time*/
+   sprintf(query, "SELECT rental.rental_id "
+                  "FROM rental ,customer, inventory "
+                  "WHERE rental.rental_id = %s "
+                        "rental.inventory_id = inventory.inventory_id "
+                        "inventory.film_id = film.film_id;", r_id);
+
+   SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+
+   SQLBindCol(stmt, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
+   ret = SQLFetch(stmt);
+
+   if(!SQL_SUCCEEDED(ret)){
+     fprintf(stdout, "ERROR: that rent has never been done.\n");
+     SQLCloseCursor(stmt);
+     SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+     ret = odbc_disconnect(env, dbc);
+     if(!SQL_SUCCEEDED(ret)) {
+       return EXIT_FAILURE;
+     }
+     return EXIT_FAILURE;
+   }
+
+    SQLCloseCursor(stmt);
+
+    /* We remove the rent from the database  */
+    sprintf(query, "DELETE FROM rental "
+                   "WHERE rental.rental_id = %s;", r_id);
+
+    SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+
+    if (!SQL_SUCCEEDED(ret)){
+      fprintf(stdout, "ERROR: rental could not be removed.\n");
+      SQLCloseCursor(stmt);
+      SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+      ret = odbc_disconnect(env, dbc);
+      if(!SQL_SUCCEEDED(ret)) {
+        return EXIT_FAILURE;
+      }
+      return EXIT_FAILURE;
+    }
+
+    SQLCloseCursor(stmt);
+
+    /* We remove the payment */
+    sprintf(query, "DELETE FROM payment "
+                   "WHERE payment.rental_id = %s;", r_id);
+
+    ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+
+    if(!SQL_SUCCEEDED(ret)){
+      fprintf(stdout, "ERROR: payment could not be removed.\n");
       SQLCloseCursor(stmt);
       SQLFreeHandle(SQL_HANDLE_STMT, stmt);
       ret = odbc_disconnect(env, dbc);
