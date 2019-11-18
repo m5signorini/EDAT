@@ -5,6 +5,7 @@
 #include <sqlext.h>
 #include "odbc.h"
 
+int err_disconnect(SQLHENV* env, SQLHDBC* dbc, SQLHSTMT* stmt);
 int param_error();
 int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am);
 int remove_rent(char* r_id);
@@ -71,9 +72,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
   if(!SQL_SUCCEEDED(ret)){
     fprintf(stderr, "Error en la búsqueda del cliente\n" );
     fprintf(stderr, "Parámetro <%s> no válido\n", c_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    odbc_disconnect(env, dbc);
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, customer_id, sizeof(customer_id), NULL);
@@ -81,39 +80,30 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
   /* If the customer does not exist we cannot add the rent */
   if(!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: cliente no encontrado.\n");
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: cliente no encontrado.\n");
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
 
   /* We check if the film exists and if it is available for rent */
-  sprintf(query, "SELECT film.film_id, inventory.inventory_id "
-  "FROM film, rental, inventory "
-  "WHERE film.film_id = ? and "
-  "film.film_id = inventory.film_id and "
-  "rental.inventory_id = inventory.inventory_id");
+  sprintf(query, "SELECT inventory.film_id, inventory.inventory_id "
+  "FROM inventory "
+  "WHERE inventory.store_id = ? and "
+  "inventory.film_id = ? and "
+  "inventory.inventory_id <> ALL  "
+  "(SELECT rental.inventory_id "
+  "FROM rental "
+  "WHERE rental.return_date > CURRENT_TIMESTAMP)");
 
   SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
   SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
+  SQLBindParameter(stmt, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, st_id, 0, NULL);
   ret = SQLExecute(stmt);
   if(!SQL_SUCCEEDED(ret)){
     fprintf(stderr, "Error en la búsqueda de la película\n" );
-    fprintf(stderr, "Parámetro <%s> no válido\n", f_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "Parámetros <%s>, <%s> no válidos\n", f_id, st_id);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, film_id, sizeof(film_id), NULL);
@@ -122,15 +112,9 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
   ret = SQLFetch(stmt);
 
   if (!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: film_id %s no encontrado o no disponible en alquiler.\n", f_id);
+    fprintf(stderr, "ERROR: Pelicula con id %s no encontrado o no disponible en alquiler en la tienda de id %s.\n", f_id, st_id);
     SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
@@ -149,28 +133,15 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
   if(!SQL_SUCCEEDED(ret)){
     fprintf(stderr, "Error en la búsqueda del empleado\n" );
     fprintf(stderr, "Parámetros <%s>, <%s> no válidos\n", s_id, st_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, staff_id, sizeof(staff_id), NULL);
   ret = SQLFetch(stmt);
 
   if (!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: store_id %s no coincide con el empleado de id %s.\n", st_id, s_id);
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: store_id %s no coincide con el empleado de id %s.\n", st_id, s_id);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
@@ -189,88 +160,66 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
   if(!SQL_SUCCEEDED(ret)){
     fprintf(stderr, "Error en la comprobación del cliente y la tienda\n" );
     fprintf(stderr, "Parámetros <%s>, <%s> no válidos\n", st_id, c_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, store_id, sizeof(store_id), NULL);
   ret = SQLFetch(stmt);
 
   if (!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: store_id %s no coincide con el cliente con id %s.\n", st_id, c_id);
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: Tienda de id %s no coincide con el cliente con id %s.\n", st_id, c_id);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
-
-  printf("%s,%s,%s\n",inventory_id, customer_id, staff_id);
 
   /* We add the rent */
   sprintf(query, "INSERT INTO rental (rental_id, rental_date, inventory_id, customer_id, return_date, staff_id, last_update) "
-  "VALUES (DEFAULT, CURRENT_TIMESTAMP, %s, %s, CURRENT_TIMESTAMP + INTERVAL '1 month', %s, DEFAULT)", inventory_id, customer_id, staff_id);
+  "VALUES (DEFAULT, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP + INTERVAL '1 month', ?, DEFAULT) "
+  "RETURNING rental.rental_id");
 
-  ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
-
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, inventory_id, 0, NULL);
+  SQLBindParameter(stmt, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, customer_id, 0, NULL);
+  SQLBindParameter(stmt, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, staff_id, 0, NULL);
+  ret = SQLExecute(stmt);
   if(!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: rent could not be done.\n");
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: El alquiler no pudo ser añadido.\n");
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
-  SQLCloseCursor(stmt);
-
-  /* We obtain the rental_id of the rent we have just done */
-  sprintf(query, "SELECT rental.rental_id "
-  "FROM rental "
-  "ORDER BY rental.rental_id DESC;");
-
-
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
   SQLBindCol(stmt, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
   ret = SQLFetch(stmt);
-
   if (!SQL_SUCCEEDED(ret)){
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: Id no insertada correctamente.\n");
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
 
   /* We add the payment */
   sprintf(query, "INSERT INTO payment (payment_id, customer_id, staff_id, rental_id, amount, payment_date) "
-  "VALUES (DEFAULT, %s, %s, %s, %d, CURRENT_TIMESTAMP);", customer_id, staff_id, rental_id, am);
-  ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+  "VALUES (DEFAULT, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, customer_id, 0, NULL);
+  SQLBindParameter(stmt, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, staff_id, 0, NULL);
+  SQLBindParameter(stmt, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, rental_id, 0, NULL);
+  SQLBindParameter(stmt, 4, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &am, 0, NULL);
 
-  if(!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: payment could not be processed.\n");
+  ret = SQLExecute(stmt);
+  if(!SQL_SUCCEEDED(ret)) {
+    fprintf(stderr, "ERROR: Pago no procesado.\n");
     SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
+
+    sprintf(query, "DELETE FROM rental WHERE rental.rental_id = ?");
+    SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, rental_id, 0, NULL);
+    ret = SQLExecute(stmt);
     if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
+      fprintf(stderr, "ERROR: El alquiler no pudo ser eliminado.\n");
+      return err_disconnect(&env, &dbc, &stmt);
     }
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
@@ -306,63 +255,46 @@ int remove_rent(char* r_id){
   /* First we check that in fact the rent we want to remove
   has been done at any time*/
   sprintf(query, "SELECT rental.rental_id "
-  "FROM rental ,customer, inventory "
-  "WHERE rental.rental_id = %s "
-  "rental.inventory_id = inventory.inventory_id "
-  "inventory.film_id = film.film_id;", r_id);
-
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+  "FROM rental "
+  "WHERE rental.rental_id = ? ");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, r_id, 0, NULL);
+  ret = SQLExecute(stmt);
+  if(!SQL_SUCCEEDED(ret)){
+    fprintf(stderr, "Error en la ejecución de la consulta\n" );
+    fprintf(stderr, "Parámetro <%s> no válido\n", r_id);
+    return err_disconnect(&env, &dbc, &stmt);
+  }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
   ret = SQLFetch(stmt);
-
   if(!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: that rent has never been done.\n");
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
-  }
-
-  SQLCloseCursor(stmt);
-
-  /* We remove the rent from the database  */
-  sprintf(query, "DELETE FROM rental "
-  "WHERE rental.rental_id = %s;", r_id);
-
-  SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
-
-  if (!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: rental could not be removed.\n");
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "ERROR: el alquiler con id %s no existe.\n", r_id);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
 
   /* We remove the payment */
   sprintf(query, "DELETE FROM payment "
-  "WHERE payment.rental_id = %s;", r_id);
-
-  ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
-
+  "WHERE payment.rental_id = ?");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, r_id, 0, NULL);
+  ret = SQLExecute(stmt);
   if(!SQL_SUCCEEDED(ret)){
-    fprintf(stdout, "ERROR: payment could not be removed.\n");
-    SQLCloseCursor(stmt);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    ret = odbc_disconnect(env, dbc);
-    if(!SQL_SUCCEEDED(ret)) {
-      return EXIT_FAILURE;
-    }
-    return EXIT_FAILURE;
+    fprintf(stderr, "No existes pagos asociados al alquiler de id %s.\n", r_id);
+  }
+  SQLCloseCursor(stmt);
+
+  /* We remove the rent from the database  */
+  sprintf(query, "DELETE FROM rental "
+  "WHERE rental.rental_id = ?");
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, r_id, 0, NULL);
+  ret = SQLExecute(stmt);
+  if(!SQL_SUCCEEDED(ret)){
+    fprintf(stderr, "Error en la eliminación del alquiler\n" );
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLCloseCursor(stmt);
@@ -375,6 +307,24 @@ int remove_rent(char* r_id){
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
+}
+
+int err_disconnect(SQLHENV* env, SQLHDBC* dbc, SQLHSTMT* stmt) {
+  SQLRETURN ret;
+
+  if(stmt != NULL) {
+    SQLCloseCursor(*stmt);
+    SQLFreeHandle(SQL_HANDLE_STMT, *stmt);
+  }
+  if(env != NULL) {
+    ret = odbc_disconnect(*env, *dbc);
+    if(!SQL_SUCCEEDED(ret)) {
+      fprintf(stderr, "ERROR: La desconexión ha fallado.\n");
+      return EXIT_FAILURE;
+    }
+  }
+
+  return EXIT_FAILURE;
 }
 
 int param_error() {

@@ -8,7 +8,7 @@
 /*
 * example 4 with a queries build on-the-fly, the good way
 */
-
+int err_disconnect(SQLHENV* env, SQLHDBC* dbc, SQLHSTMT* stmt);
 int param_error();
 int customer_query(char* f_n, char* l_n);
 int film_query(char* f_title);
@@ -121,9 +121,7 @@ int customer_query(char* f_n, char* l_n) {
   if(!SQL_SUCCEEDED(ret)) {
     fprintf(stderr, "Error en la ejecución de la consulta\n" );
     fprintf(stderr, "Parámetros <%s>, <%s> no válidos\n", f_n, l_n);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    odbc_disconnect(env, dbc);
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, customer_id, sizeof(customer_id), NULL);
@@ -216,9 +214,7 @@ int film_query(char* f_title) {
   if(!SQL_SUCCEEDED(ret)) {
     fprintf(stderr, "Error en la ejecución de la consulta\n" );
     fprintf(stderr, "Parámetro <%s> no válido\n", f_title_2);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt_1);
-    odbc_disconnect(env, dbc);
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt_1);
   }
 
 
@@ -247,7 +243,13 @@ int film_query(char* f_title) {
 
     SQLPrepare(stmt_2, (SQLCHAR*) query_2, SQL_NTS);
     SQLBindParameter(stmt_2, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id_1, 0, NULL);
-    SQLExecute(stmt_2);
+    ret = SQLExecute(stmt_2);
+    if(!SQL_SUCCEEDED(ret)) {
+      fprintf(stderr, "Error en la búsqueda\n" );
+      err_disconnect(&env, &dbc, &stmt_2);
+      err_disconnect(NULL, NULL, &stmt_1);
+      return EXIT_FAILURE;
+    }
     SQLBindCol(stmt_2, 1, SQL_C_CHAR, first_name, sizeof(first_name), NULL);
     SQLBindCol(stmt_2, 2, SQL_C_CHAR, last_name, sizeof(last_name), NULL);
     while(SQL_SUCCEEDED(ret = SQLFetch(stmt_2))) {
@@ -324,9 +326,7 @@ int rent_query(char* c_id, char* d_1, char* d_2) {
   if(!SQL_SUCCEEDED(ret)) {
     fprintf(stderr, "Error en la ejecución de la consulta\n" );
     fprintf(stderr, "Parámetros <%s>, <%s>, <%s> no válidos\n", d_1, d_2, c_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    odbc_disconnect(env, dbc);
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
 
@@ -471,9 +471,7 @@ int recommend_query(char* customer_id) {
   if(!SQL_SUCCEEDED(ret)) {
     fprintf(stderr, "Error en la ejecución de la consulta\n" );
     fprintf(stderr, "Parámetro <%s> no válido\n", customer_id);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-    odbc_disconnect(env, dbc);
-    return EXIT_FAILURE;
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
   SQLBindCol(stmt, 1, SQL_C_CHAR, film_id, sizeof(film_id), NULL);
@@ -502,6 +500,24 @@ int recommend_query(char* customer_id) {
   }
 
   return EXIT_SUCCESS;
+}
+
+int err_disconnect(SQLHENV* env, SQLHDBC* dbc, SQLHSTMT* stmt) {
+  SQLRETURN ret;
+
+  if(stmt != NULL) {
+    SQLCloseCursor(*stmt);
+    SQLFreeHandle(SQL_HANDLE_STMT, *stmt);
+  }
+  if(env != NULL && dbc != NULL) {
+    ret = odbc_disconnect(*env, *dbc);
+    if(!SQL_SUCCEEDED(ret)) {
+      fprintf(stdout, "ERROR: La desconexión ha fallado.\n");
+      return EXIT_FAILURE;
+    }
+  }
+
+  return EXIT_FAILURE;
 }
 
 int param_error() {
