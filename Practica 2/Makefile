@@ -2,7 +2,7 @@
 GRUPO=1201
 PAREJA=09
 
-export PGDATABASE:=dvdrental2
+export PGDATABASE:=dvdrental
 export PGUSER :=alumnodb
 export PGPASSWORD :=alumnodb
 export PGCLIENTENCODING:=LATIN9
@@ -19,7 +19,7 @@ CC = gcc -std=c99
 CFLAGS = -Wall -Wextra -pedantic
 LDLIBS = -lodbc
 
-EXE = odbc-test-1 dvdreq
+EXE = dvdreq dvdrent
 
 all: $(EXE)
 
