@@ -39,8 +39,6 @@ int remove_film(char* f_id){
 
   SQLHENV env;
   SQLHDBC dbc;
-  SQLHSTMT stmt1;
-  SQLHSTMT stmt2;
   SQLRETURN ret; /* ODBC API return status */
   char query[1024];
 
@@ -55,134 +53,137 @@ int remove_film(char* f_id){
   }
 
   /* Allocate a statement handle */
-  SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt1);
-  SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt2);
+  SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
 
   /* First we check that the film is in the database */
   sprintf(query, "SELECT film.film_id "
                  "FROM film "
                  "WHERE film.film_id = ?");
 
-  SQLPrepare(stmt1, (SQLCHAR*) query, SQL_NTS);
-  SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
+  SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+  SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
 
-  ret = SQLExecute(stmt1);
+  ret = SQLExecute(stmt);
 
   if(!SQL_SUCCEEDED(ret)) {
     fprintf(stderr, "Error en la ejecución de la consulta\n" );
     fprintf(stderr, "Parámetros <%s> no válidos\n", f_id);
-    return err_disconnect(&env, &dbc, &stmt1);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
-  SQLBindCol(stmt1, 1, SQL_C_CHAR, film_id, sizeof(film_id), NULL);
-  ret = SQLFetch(stmt1);
+  SQLBindCol(stmt, 1, SQL_C_CHAR, film_id, sizeof(film_id), NULL);
+  ret = SQLFetch(stmt);
 
   /* If the film does not exist in the database we cannot remove the film */
   if(!SQL_SUCCEEDED(ret)){
     fprintf(stdout, "ERROR: Película no encontrada.\n");
-    return err_disconnect(&env, &dbc, &stmt1);
+    return err_disconnect(&env, &dbc, &stmt);
   }
 
-    SQLCloseCursor(stmt1);
+    SQLCloseCursor(stmt);
 
 
   /**/
-    sprintf(query, "SELECT rental.rental_id "
-                   "FROM rental "
-                   "WHERE rental.inventory_id = inventory.inventory_id and "
-                         "inventory.film_id = ?");
+       sprintf(query, "DELETE payment "
+                      "WHERE payment.rental_id IN (SELECT payment.rental_id "
+                                                  "FROM payment, rental, inventory "
+                                                  "WHERE payment.rental_id = rental.rental_id and "
+                                                       "rental.inventory_id = inventory.inventory_id and "
+                                                       "inventory.film_id = ?)");
 
-    SQLPrepare(stmt1, (SQLCHAR*) query, SQL_NTS);
-    SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
-    ret = SQLExecute(stmt1);
-
-    if(!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: Alquiler no encontrado.\n");
-      return err_disconnect(&env, &dbc, &stmt1);
-    }
-    SQLBindCol(stmt1, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
-
-    while(SQL_SUCCEEDED(ret = SQLFetch(stmt1))) {
-       sprintf(query, "DELETE payment"
-                      "WHERE payment.rental_id = ? ");
-
-       SQLPrepare(stmt2, (SQLCHAR*) query, SQL_NTS);
-       SQLBindParameter(stmt2, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, rental_id, 0, NULL);
-       ret = SQLExecute(stmt2);
+       SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+       SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+       ret = SQLExecute(stmt);
 
        if(!SQL_SUCCEEDED(ret)){
          fprintf(stdout, "ERROR: Pago no eliminado.\n");
-         return err_disconnect(&env, &dbc, &stmt2);
+         return err_disconnect(&env, &dbc, &stmt);
        }
-     }
 
 
-    SQLCloseCursor(stmt1);
-    SQLCloseCursor(stmt2);
+
+    SQLCloseCursor(stmt);
 
 
-    sprintf(query, "DELETE FROM inventory "
-                   "WHERE inventory.film_id = ? ");
-
-    SQLPrepare(stmt1, (SQLCHAR*) query, SQL_NTS);
-    SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
-    ret = SQLExecute(stmt1);
+    sprintf(query, "DELETE FROM rental "
+                   "WHERE rental.rental_id IN (SELECT rental.rental_id "
+                                              "FROM rental, inventory "
+                                              "WHERE rental.inventory_id = inventory.inventory_id and "
+                                                    "inventory.film_id = ?)");
+    SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+    ret = SQLExecute(stmt);
 
     if(!SQL_SUCCEEDED(ret)){
-      fprintf(stdout, "ERROR: Inventario no eliminado.\n");
-      return err_disconnect(&env, &dbc, &stmt1);
+      fprintf(stdout, "ERROR: Alquiler no eliminado.\n");
+      return err_disconnect(&env, &dbc, &stmt);
     }
 
-    SQLCloseCursor(stmt1);
+    SQLCloseCursor(stmt);
+
+    sprintf(query, "DELETE FROM inventory "
+                   "WHERE inventory.inventory_id IN (SELECT inventory.inventory_id "
+                                              "FROM inventory "
+                                              "WHERE inventory.film_id = ?)");
+
+    SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+    ret = SQLExecute(stmt);
+
+    if(!SQL_SUCCEEDED(ret)){
+      fprintf(stdout, "ERROR: Película no eliminada de la tabla inventory.\n");
+      return err_disconnect(&env, &dbc, &stmt);
+    }
+
+    SQLCloseCursor(stmt);
 
 
     sprintf(query, "DELETE FROM film_actor "
                    "WHERE film_actor.film_id = ? ");
 
     SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
-    SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
-    ret = SQLExecute(stmt1);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+    ret = SQLExecute(stmt);
 
     if(!SQL_SUCCEEDED(ret)){
       fprintf(stdout, "ERROR: Película no eliminada de la tabla film_actor.\n");
-      return err_disconnect(&env, &dbc, &stmt1);
+      return err_disconnect(&env, &dbc, &stmt);
     }
 
-    SQLCloseCursor(stmt1);
+    SQLCloseCursor(stmt);
 
 
     sprintf(query, "DELETE FROM film_category "
                    "WHERE film_category.film_id = ? ");
 
-    SQLPrepare(stmt1, (SQLCHAR*) query, SQL_NTS);
-    SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
-    ret = SQLExecute(stmt1);
+    SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+    ret = SQLExecute(stmt);
 
     if(!SQL_SUCCEEDED(ret)){
       fprintf(stdout, "ERROR: Película no eliminada de la tabla film_category.\n");
-      return err_disconnect(&env, &dbc, &stmt1);
+      return err_disconnect(&env, &dbc, &stmt);
     }
 
-    SQLCloseCursor(stmt1);
+    SQLCloseCursor(stmt);
 
 
     sprintf(query, "DELETE FROM film "
                    "WHERE film.film_id = ? ");
 
     SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
-    SQLBindParameter(stmt1, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
-    ret = SQLExecute(stmt1);
+    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, film_id, 0, NULL);
+    ret = SQLExecute(stmt);
 
     if(!SQL_SUCCEEDED(ret)){
       fprintf(stdout, "ERROR: Película no eliminada de la tabla film.\n");
-      return err_disconnect(&env, &dbc, &stmt1);
+      return err_disconnect(&env, &dbc, &stmt);
     }
 
-    SQLCloseCursor(stmt1);
+    SQLCloseCursor(stmt);
 
     /* Free up statement handle */
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt1);
-    SQLFreeHandle(SQL_HANDLE_STMT, stmt2);
+    SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 
     /* DISCONNECT */
     ret = odbc_disconnect(env, dbc);
@@ -190,7 +191,7 @@ int remove_film(char* f_id){
       return EXIT_FAILURE;
     }
 
-    fprintf(stdout, "Film deleted correctly\n");
+    fprintf(stdout, "Película eliminada exitosamente\n");
     return EXIT_SUCCESS;
  }
 
