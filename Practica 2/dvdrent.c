@@ -99,7 +99,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
   "FROM film, rental, inventory "
   "WHERE film.film_id = ? and "
   "film.film_id = inventory.film_id and "
-  "rental.inventory_id = inventory.inventory_id)");
+  "rental.inventory_id = inventory.inventory_id");
 
   SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
   SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
@@ -215,9 +215,11 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
   SQLCloseCursor(stmt);
 
+  printf("%s,%s,%s\n",inventory_id, customer_id, staff_id);
+
   /* We add the rent */
   sprintf(query, "INSERT INTO rental (rental_id, rental_date, inventory_id, customer_id, return_date, staff_id, last_update) "
-  "VALUES (DEFAULT, GETDATE(), %s, %s, TO_DATE('20/12/2019', 'DD/MM/YYYY'), %s, DEFAULT);", inventory_id, customer_id, staff_id);
+  "VALUES (DEFAULT, CURRENT_TIMESTAMP, %s, %s, CURRENT_TIMESTAMP + INTERVAL '1 month', %s, DEFAULT)", inventory_id, customer_id, staff_id);
 
   ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
@@ -257,7 +259,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
 
   /* We add the payment */
   sprintf(query, "INSERT INTO payment (payment_id, customer_id, staff_id, rental_id, amount, payment_date) "
-  "VALUES (DEFAULT, %s, %s, %s, %d, GETDATE());", customer_id, staff_id, rental_id, am);
+  "VALUES (DEFAULT, %s, %s, %s, %d, CURRENT_TIMESTAMP);", customer_id, staff_id, rental_id, am);
   ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
   if(!SQL_SUCCEEDED(ret)){
