@@ -16,7 +16,7 @@ PG_DUMP = pg_dump
 PG_RESTORE = pg_restore
 
 CC = gcc -std=c99
-CFLAGS = -Wall -Wextra -pedantic
+CFLAGS = -g -Wall -Wextra -pedantic
 LDLIBS = -lodbc
 
 EXE = dvdreq dvdrent

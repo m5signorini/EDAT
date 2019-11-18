@@ -222,6 +222,8 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     return err_disconnect(&env, &dbc, &stmt);
   }
 
+  fprintf(stdout, "El alquiler ha sido añadido satisfactoriamente con la id %s\n", rental_id);
+
   SQLCloseCursor(stmt);
   /* Free up statement handle */
   SQLFreeHandle(SQL_HANDLE_STMT, stmt);
@@ -282,7 +284,7 @@ int remove_rent(char* r_id){
   SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, r_id, 0, NULL);
   ret = SQLExecute(stmt);
   if(!SQL_SUCCEEDED(ret)){
-    fprintf(stderr, "No existes pagos asociados al alquiler de id %s.\n", r_id);
+    fprintf(stderr, "No existen pagos asociados al alquiler de id %s.\n", r_id);
   }
   SQLCloseCursor(stmt);
 
@@ -296,6 +298,8 @@ int remove_rent(char* r_id){
     fprintf(stderr, "Error en la eliminación del alquiler\n" );
     return err_disconnect(&env, &dbc, &stmt);
   }
+
+  fprintf(stdout, "El alquiler con la id %s ha sido satisfactoriamente eliminado\n", r_id);
 
   SQLCloseCursor(stmt);
   /* Free up statement handle */
