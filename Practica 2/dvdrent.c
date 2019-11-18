@@ -5,8 +5,41 @@
 #include <sqlext.h>
 #include "odbc.h"
 
+
+int param_error();
 int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am);
 int remove_rent(char* r_id);
+
+int main(int argc, char** argv) {
+
+  /* CHECK COMMAND LINE */
+  if(argc < 2) {
+    fprintf(stderr, "Error en los parametros de entrada, escribe una de las siguientes opciones:\n\n");
+    fprintf(stderr, "./dvdrent new <Customer Id> <Film Id> <Staff Id> <Store Id> <Amount>\n");
+    fprintf(stderr, "./dvdrent remove <Rent Id>\n");
+
+    return EXIT_FAILURE;
+  }
+
+  /* CASO NEW */
+  if(strcmp(argv[1], "new") == 0) {
+    if(argc < 7) return param_error();
+   /* QUERY USING PARAMETERS */
+   return add_rent(argv[2], argv[3], argv[4], argv[5],argv[6]);
+  }
+
+  /* CASO REMOVE */
+  else if(strcmp(argv[1], "remove") == 0) {
+    if(argc < 3) return param_error();
+    return remove_rent(argv[2]);
+  }
+
+  else {
+    return param_error();
+  }
+
+  return EXIT_FAILURE;
+}
 
 /* c_id = customer_id, f_id = film_id, s_id = staff_id,
    st_id = store_id, am = amount */
@@ -112,8 +145,8 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     sprintf(query, "SELECT store.store_id "
                     "FROM store, customer "
                     "WHERE store.store_id = %s and "
-                          "customer.customer_id = %s and "
-                          "customer.store_id = store.store_id;" st_id, c_id);
+                           "customer.customer_id = %s and "
+                           "customer.store_id = store.store_id;" st_id, c_id);
 
     SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
     SQLBindCol(stmt, 1, SQL_C_CHAR, store_id, sizeof(store_id), NULL);
@@ -156,7 +189,6 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
                     "FROM rental "
                     "ORDER BY rental.rental_id DESC;");
 
-
     SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
     SQLBindCol(stmt, 1, SQL_C_CHAR, rental_id, sizeof(rental_id), NULL);
     ret = SQLFetch(stmt);
@@ -175,6 +207,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     /* We add the payment */
     sprintf(query, "INSERT INTO payment (payment_id, customer_id, staff_id, rental_id, amount, payment_date) "
                    "VALUES (DEFAULT, %s, %s, %s, %d, GETDATE());", customer_id, staff_id, rental_id, amount);
+
     ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
     if(!SQL_SUCCEEDED(ret)){
@@ -197,6 +230,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     if(!SQL_SUCCEEDED(ret)) {
       return EXIT_FAILURE;
     }
+    fprintf(stdout, "Rent added correctly\n");
     return EXIT_SUCCESS;
  }
 
@@ -223,8 +257,8 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
       has been done at any time*/
    sprintf(query, "SELECT rental.rental_id "
                   "FROM rental ,customer, inventory "
-                  "WHERE rental.rental_id = %s "
-                        "rental.inventory_id = inventory.inventory_id "
+                  "WHERE rental.rental_id = %s and "
+                        "rental.inventory_id = inventory.inventory_id and "
                         "inventory.film_id = film.film_id;", r_id);
 
    SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
@@ -249,7 +283,7 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     sprintf(query, "DELETE FROM rental "
                    "WHERE rental.rental_id = %s;", r_id);
 
-    SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
+    ret = SQLExecDirect(stmt, (SQLCHAR*) query, SQL_NTS);
 
     if (!SQL_SUCCEEDED(ret)){
       fprintf(stdout, "ERROR: rental could not be removed.\n");
@@ -290,5 +324,13 @@ int add_rent(char* c_id, char* f_id, char* s_id, char* st_id, int am){
     if(!SQL_SUCCEEDED(ret)) {
       return EXIT_FAILURE;
     }
+    fprintf(stdout, "Rent removed correctly\n");
     return EXIT_SUCCESS;
+ }
+
+ int param_error() {
+   fprintf(stderr, "Error en los parametros de entrada, escribe una de las siguientes opciones:\n\n");
+   fprintf(stderr, "./dvdrent new <Customer Id> <Film Id> <Staff Id> <Store Id> <Amount>\n");
+   fprintf(stderr, "./dvdrent remove <Rent Id>\n");
+   return EXIT_FAILURE;
  }
