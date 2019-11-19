@@ -67,7 +67,7 @@ test2:
 	@cat query2.sql | $(PSQL)
 
 test3:
-	@echo query3: "Testing dvdfilm remove 111"
-	@cat query3.sql | $(PSQL)
+	@echo query11: "Testing dvdfilm remove 111"
+	@cat query11.sql | $(PSQL)
 	./dvdfilm remove 111
-	@cat query3.sql | $(PSQL)
+	@cat query11.sql | $(PSQL)
