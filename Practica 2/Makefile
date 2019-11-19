@@ -19,7 +19,7 @@ CC = gcc -std=c99
 CFLAGS = -g -Wall -Wextra -pedantic
 LDLIBS = -lodbc
 
-EXE = dvdreq dvdrent
+EXE = dvdreq dvdrent dvdfilm
 
 all: $(EXE)
 
