@@ -54,5 +54,20 @@ clean :
 
 $(EXE) : % : %.o odbc.o
 
-ejerc_1:
-	--leak-check=full --show-leak-kinds=all ./dvdreq customer -n James -a Gannon
+test1:
+	@echo query1: "Testing dvdrent new 39 1 1 1 5"
+	@cat query1.sql | $(PSQL)
+	./dvdrent new 39 1 1 1 5
+	@cat query1.sql | $(PSQL)
+
+test2:
+	@echo query2: "Testing dvdrent remove 10126"
+	@cat query2.sql | $(PSQL)
+	./dvdrent remove 10126
+	@cat query2.sql | $(PSQL)
+
+test3:
+	@echo query3: "Testing dvdfilm remove 111"
+	@cat query3.sql | $(PSQL)
+	./dvdfilm remove 111
+	@cat query3.sql | $(PSQL)

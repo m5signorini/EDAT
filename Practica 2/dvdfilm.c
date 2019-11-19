@@ -59,7 +59,6 @@ int remove_film(char* f_id){
   sprintf(query, "SELECT film.film_id "
                  "FROM film "
                  "WHERE film.film_id = ?");
-  printf("%s\n", f_id);
 
   SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
   SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
