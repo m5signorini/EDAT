@@ -39,11 +39,11 @@ int remove_film(char* f_id){
 
   SQLHENV env;
   SQLHDBC dbc;
+  SQLHSTMT stmt;
   SQLRETURN ret; /* ODBC API return status */
   char query[1024];
 
   SQLCHAR film_id[512];
-  SQLCHAR rental_id[512];
 
 
   /* CONNECT */
@@ -59,6 +59,7 @@ int remove_film(char* f_id){
   sprintf(query, "SELECT film.film_id "
                  "FROM film "
                  "WHERE film.film_id = ?");
+  printf("%s\n", f_id);
 
   SQLPrepare(stmt, (SQLCHAR*) query, SQL_NTS);
   SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 0, 0, f_id, 0, NULL);
@@ -84,7 +85,7 @@ int remove_film(char* f_id){
 
 
   /**/
-       sprintf(query, "DELETE payment "
+       sprintf(query, "DELETE FROM payment "
                       "WHERE payment.rental_id IN (SELECT payment.rental_id "
                                                   "FROM payment, rental, inventory "
                                                   "WHERE payment.rental_id = rental.rental_id and "
