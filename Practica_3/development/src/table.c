@@ -29,6 +29,7 @@ struct table_ {
   FILE* file;
   long first_pos;
   long last_pos;
+  long to_read;
   char* buffer;
 };
 
@@ -121,7 +122,11 @@ table_t* table_open(char* path) {
   fseek(tb->file, 0, SEEK_SET);
 
   /* Get ncols from the file */
-  fread((void*)&tb->ncols, sizeof(int), 1, tb->file);
+  /*Vamos a guardar en tb->cols 1 cosa de tamaño int del file tb->file*/
+  if(fread((void*)&tb->ncols, sizeof(int), 1, tb->file) != 1){
+    fclose(tb->file);
+    free(tb);
+  }
 
   /* Set types array based on ncols */
   tb->types = (type_t*)malloc(sizeof(type_t)*tb->ncols);
@@ -130,17 +135,23 @@ table_t* table_open(char* path) {
     free(tb);
     return NULL;
   }
-  fread((void*)tb->types, sizeof(type_t), tb->ncols, tb->file);
+  if(fread((void*)tb->types, sizeof(type_t), tb->ncols, tb->file) != tb->ncols){
+    fclose(tb->file);
+    free(tb);
+  }
 
   /* Size of the ncols in the file + size of every type*/
   tb->first_pos = ftell(tb->file);
 
-  /* lats_pos is not set, must use insert_record */
-  tb->last_pos = -1L;
+  /* Set last_pos */
+  fseek(tb->file, 0, SEEK_END);
+  tb->last_pos = ftell(tb->file);
+  fseek(tb->file, 0, SEEK_SET);
 
   /* Buffer set to null */
   tb->buffer = NULL;
-  return NULL;
+  tb->to_read = -1L;
+  return tb;
 }
 
 /*
@@ -226,7 +237,7 @@ type_t *table_types(table_t* table) {
 
     Returns the position of the file where the first record begin. Calling
     table_read_record with this value as position will result in reading
-    the first record of the table (see the example at the beginning of this
+    the first retypecord of the table (see the example at the beginning of this
     file.
 
     Parameters:
@@ -291,17 +302,21 @@ long table_read_record(table_t* t, long pos) {
   fseek(pf, pos, SEEK_SET);
 
   /* Get reg tam */
+  /*Vamos a leer y guardar en tam, 1 cosa de tamaño int del file pf*/
   if(fread((void*)&tam, sizeof(int), 1, pf) != 1) {
     /* Couldn't read or EOF reached */
     return -1L;
   }
+
+  t->to_read = ftell(pf);
 
   buf = (char*)malloc(sizeof(char)*tam);
   if(buf == NULL) {
     return -1L;
   }
   /* Read to buffer */
-  if(fread(buf), sizeof(char), tam, pf) != tam) {
+  /*Vamos a leer y guardar en buff, "tam" cosas de tamaño char del file pf*/
+  if(fread(buf, sizeof(char), tam, pf) != tam) {
     free(buf);
     return -1L;
   }
@@ -335,12 +350,14 @@ long table_read_record(table_t* t, long pos) {
     of the file).
 */
 void *table_get_col(table_t* table, int col) {
-  if(t == NULL || col >= t->ncols || t->buf == NULL) return NULL;
+  if(table == NULL || col >= table->ncols || table->buffer == NULL) return NULL;
 
   type_t type;
   int i;
-  char* buf = t->buf;
+  char* buf = table->buffer;
   void* value = NULL;
+
+  fseek(table->file, table->to_read, SEEK_SET);
 
   for(i=0; i <= col; i++) {
     /* Free value */
@@ -349,9 +366,16 @@ void *table_get_col(table_t* table, int col) {
       value = NULL;
     }
     /* Get type and parse into value */
-    type = t->types[i];
+    type = table->types[i];
+    /*Buff tiene todos los bytes guardados (de todos los tipos) y buf apunta al primer carácter. Con esta funcion (value_parse)
+     leemos hasta los 4 primeros bytes en caso de que type sea INT o hasta /0 en caso de que type sea STR. Y esa STR o ese
+     INT se guardará en value*/
     value = value_parse(type, buf);
     if(value == NULL) {
+      return NULL;
+    }
+    if(fread(value, value_length(type, value), 1, table->file) != 1) {
+      free(value);
       return NULL;
     }
     /* Update buffer */
@@ -378,17 +402,37 @@ void *table_get_col(table_t* table, int col) {
     0: error
 */
 int table_insert_record(table_t* t, void** values) {
-  FILE* pf = t->file;
-  int reg_tam = 0;
-
-  /* Set beginning of file's regs */
-  fseek(pf, t->first_pos, SEEK_SET);
-
-  while() {
-    if(fread(&reg_tam, sizeof(int), 1, pf) != 1) {
-      /* Couldn't read or EOF reached */
-    }
-    fread()
+  if(t == NULL || values == NULL || t->file == NULL){
+    return 0;
   }
-  return 0;
+
+  FILE* pf = t->file;
+  int tam = 0;
+  int i;
+  void* value = NULL;
+
+  /*Gets the size of the record*/
+  for(i = 0; i < t->ncols; i++){
+    tam += value_length(t->types[i], values[i]);
+  }
+
+  fseek(pf, t->last_pos, SEEK_SET);
+
+  /*Write the size of the record*/
+  /*Writesthe size of the record in pf*/
+  if(fwrite(&tam, sizeof(int), 1, pf) != 1){
+    return 0;
+  }
+
+  /*Writes the record itself*/
+  for(i = 0; i < t->ncols; i++){
+    /*Writes data from the array pointed to, by values[i] to pf*/
+    if (fwrite(values[i], value_length(t->types[i], values[i]), 1, pf) != 1){
+      return 0;
+    }
+  }
+
+  t->last_pos = ftell(pf);
+
+  return 1;
 }

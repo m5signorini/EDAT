@@ -9,11 +9,11 @@
 #include "type.h"
 
 /*
-    Simple test: receives a command line such as 
-    
+    Simple test: receives a command line such as
+
         3 INT STR int
-        
-    Creates a table with thiose columns and types, opens it, 
+
+    Creates a table with thiose columns and types, opens it,
     and prints some information about it.
 */
 void simple_test(int argc, char **argv) {
@@ -45,16 +45,54 @@ void simple_test(int argc, char **argv) {
     table_close(t);
 }
 
+void test2() {
+  table_t *table = NULL;
+
+  table = table_open("test_tab.dat");
+
+  int ncols = table_ncols(table);
+  type_t *tp = table_types(table);
+  long pos = table_first_pos(table);
+  int i, n = 7;
+  void *val = NULL;
+  void *values[2];
+
+  values[0] = (void*)&n;
+  values[1] = (void*)&n;
+
+  /*printf("%d, %d\n", *(int*)values[0], *(int*)values[1]);
+  table_close(table);
+  return;*/
+
+  if(table_insert_record(table, values) == 0) {
+    printf("%d, %d\n", *(int*)values[0], *(int*)values[1]);
+    table_close(table);
+    return;
+  }
+  while (pos > 0) {
+      pos = table_read_record(table, pos);
+      if(pos < 0) break;
+      printf("%ld (POS)\n", pos);
+      for (i = 0; i < table_ncols(table); i++){
+          val = table_get_col(table, i);
+          print_value(stdout, tp[i], val);
+          printf("  ");
+      }
+      printf("\n");
+  }
+  table_close(table);
+}
 
 
 int main(int argc, char **argv)
 {
     if (argc>1) {
         simple_test(argc-1, argv+1);
+        test2();
     }
     else {
         cmdstatus *cs = c_create();
-    
+
         c_key_init(cs);
         c_print_status(cs);
         while(1) {
@@ -65,11 +103,10 @@ int main(int argc, char **argv)
                 printf("bye!\n");
                 exit(0);
             }
-            
+
             c_execute(cs, cmd);
             c_print_status(cs);
         }
     }
-    return 0;  
+    return 0;
 }
-
