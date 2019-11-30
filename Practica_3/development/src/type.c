@@ -77,7 +77,28 @@ void* value_parse(type_t type, char* literal) {
       break;
     default:
       value = NULL;
-    break;
+      break;
+  }
+
+  return value;
+}
+
+
+void* value_fetch(type_t type, char* buffer) {
+  void* value;
+
+  switch(type) {
+    case INT:
+      value = malloc(sizeof(int));
+      *((int*) value) = *(int*)buffer;
+      break;
+    case STR:
+      value = malloc((strlen(literal) + 1) * sizeof(char));
+      strcpy(value, literal);
+      break;
+    default:
+      value = NULL;
+      break;
   }
 
   return value;

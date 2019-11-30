@@ -29,7 +29,6 @@ struct table_ {
   FILE* file;
   long first_pos;
   long last_pos;
-  long to_read;
   char* buffer;
 };
 
@@ -123,7 +122,7 @@ table_t* table_open(char* path) {
 
   /* Get ncols from the file */
   /*Vamos a guardar en tb->cols 1 cosa de tamaño int del file tb->file*/
-  if(fread((void*)&tb->ncols, sizeof(int), 1, tb->file) != 1){
+  if(fread(&tb->ncols, sizeof(int), 1, tb->file) != 1){
     fclose(tb->file);
     free(tb);
   }
@@ -135,12 +134,12 @@ table_t* table_open(char* path) {
     free(tb);
     return NULL;
   }
-  if(fread((void*)tb->types, sizeof(type_t), tb->ncols, tb->file) != tb->ncols){
+  if(fread(tb->types, sizeof(type_t), tb->ncols, tb->file) != tb->ncols){
     fclose(tb->file);
     free(tb);
   }
 
-  /* Size of the ncols in the file + size of every type*/
+  /* Set first pos */
   tb->first_pos = ftell(tb->file);
 
   /* Set last_pos */
@@ -150,7 +149,6 @@ table_t* table_open(char* path) {
 
   /* Buffer set to null */
   tb->buffer = NULL;
-  tb->to_read = -1L;
   return tb;
 }
 
@@ -303,12 +301,10 @@ long table_read_record(table_t* t, long pos) {
 
   /* Get reg tam */
   /*Vamos a leer y guardar en tam, 1 cosa de tamaño int del file pf*/
-  if(fread((void*)&tam, sizeof(int), 1, pf) != 1) {
+  if(fread(&tam, sizeof(int), 1, pf) != 1) {
     /* Couldn't read or EOF reached */
     return -1L;
   }
-
-  t->to_read = ftell(pf);
 
   buf = (char*)malloc(sizeof(char)*tam);
   if(buf == NULL) {
@@ -357,8 +353,6 @@ void *table_get_col(table_t* table, int col) {
   char* buf = table->buffer;
   void* value = NULL;
 
-  fseek(table->file, table->to_read, SEEK_SET);
-
   for(i=0; i <= col; i++) {
     /* Free value */
     if(value != NULL) {
@@ -367,15 +361,9 @@ void *table_get_col(table_t* table, int col) {
     }
     /* Get type and parse into value */
     type = table->types[i];
-    /*Buff tiene todos los bytes guardados (de todos los tipos) y buf apunta al primer carácter. Con esta funcion (value_parse)
-    leemos hasta los 4 primeros bytes en caso de que type sea INT o hasta /0 en caso de que type sea STR. Y esa STR o ese
-    INT se guardará en value*/
-    value = value_parse(type, buf);
+    /* Parse value */
+    value = value_fetch(type, buf);
     if(value == NULL) {
-      return NULL;
-    }
-    if(fread(value, value_length(type, value), 1, table->file) != 1) {
-      free(value);
       return NULL;
     }
     /* Update buffer */
