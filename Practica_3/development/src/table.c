@@ -125,6 +125,7 @@ table_t* table_open(char* path) {
   if(fread(&tb->ncols, sizeof(int), 1, tb->file) != 1){
     fclose(tb->file);
     free(tb);
+    return NULL;
   }
 
   /* Buffer set to null */
@@ -136,7 +137,7 @@ table_t* table_open(char* path) {
   }
 
   for(i = 0; i < tb->ncols; i++){
-    table->values[i] = NULL;
+    tb->values[i] = NULL;
   }
 
   /* Set types array based on ncols */
@@ -314,13 +315,14 @@ long table_read_record(table_t* t, long pos) {
 
   FILE* pf = t->file;
   char* buf = NULL;
+  char* aux = NULL;
   int tam = 0;
+  int i;
 
   /* Set beginning of file's regs */
   fseek(pf, pos, SEEK_SET);
 
   /* Get reg tam */
-  /*Vamos a leer y guardar en tam, 1 cosa de tamaño int del file pf*/
   if(fread(&tam, sizeof(int), 1, pf) != 1) {
     /* Couldn't read or EOF reached */
     return -1L;
@@ -331,16 +333,22 @@ long table_read_record(table_t* t, long pos) {
     return -1L;
   }
   /* Read to buffer */
-  /*Vamos a leer y guardar en buff, "tam" cosas de tamaño char del file pf*/
   if(fread(buf, sizeof(char), tam, pf) != tam) {
     free(buf);
     return -1L;
   }
-  /* Save buffer */
-  if(t->buffer != NULL) {
-    free(t->buffer);
+  /* Free previous values (record) */
+  /* Save buffer in values*/
+  aux = buf;
+  for(i = 0; i < t->ncols; i++) {
+    if(t->values[i] != NULL) {
+      free(t->values[i]);
+    }
+    t->values[i] = value_set(t->types[i], aux);
+    aux += value_length(t->types[i], t->values[i]);
   }
-  t->buffer = buf;
+
+  free(buf);
 
   return ftell(pf);
 }
@@ -366,31 +374,8 @@ of the array returned by table_types (see the example at the beginning
 of the file).
 */
 void *table_get_col(table_t* table, int col) {
-  if(table == NULL || col >= table->ncols || table->buffer == NULL) return NULL;
-
-  type_t type;
-  int i;
-  char* buf = table->buffer;
-  void* value = NULL;
-
-  for(i=0; i <= col; i++) {
-    /* Free value */
-    if(value != NULL) {
-      free(value);
-      value = NULL;
-    }
-    /* Get type and parse into value */
-    type = table->types[i];
-    /* Parse value */
-    value = value_fetch(type, buf);
-    if(value == NULL) {
-      return NULL;
-    }
-    /* Update buffer */
-    buf += value_length(type, value);
-  }
-
-  return value;
+  if(table == NULL || col >= table->ncols || col < 0 || table->values == NULL) return NULL;
+  return table->values[col];
 }
 
 /*  void table_insert_record(table_t* table, void** values);
@@ -427,7 +412,6 @@ int table_insert_record(table_t* t, void** values) {
   fseek(pf, t->last_pos, SEEK_SET);
 
   /*Write the size of the record*/
-  /*Writesthe size of the record in pf*/
   if(fwrite(&tam, sizeof(int), 1, pf) != 1){
     return 0;
   }
