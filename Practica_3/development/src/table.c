@@ -29,7 +29,7 @@ struct table_ {
   FILE* file;
   long first_pos;
   long last_pos;
-  char* buffer;
+  void** values;
 };
 
 
@@ -127,15 +127,31 @@ table_t* table_open(char* path) {
     free(tb);
   }
 
-  /* Set types array based on ncols */
-  tb->types = (type_t*)malloc(sizeof(type_t)*tb->ncols);
-  if(tb->types == NULL) {
+  /* Buffer set to null */
+  tb->values = malloc(sizeof(void*)*tb->ncols);
+  if(tb->values == NULL){
     fclose(tb->file);
     free(tb);
     return NULL;
   }
+
+  for(i = 0; i < tb->ncols; i++){
+    table->values[i] = NULL;
+  }
+
+  /* Set types array based on ncols */
+  tb->types = (type_t*)malloc(sizeof(type_t)*tb->ncols);
+  if(tb->types == NULL) {
+    fclose(tb->file);
+    free(tb->values);
+    free(tb);
+    return NULL;
+  }
+
   if(fread(tb->types, sizeof(type_t), tb->ncols, tb->file) != tb->ncols){
     fclose(tb->file);
+    free(tb->types);
+    free(tb->values);
     free(tb);
   }
 
@@ -147,8 +163,6 @@ table_t* table_open(char* path) {
   tb->last_pos = ftell(tb->file);
   fseek(tb->file, 0, SEEK_SET);
 
-  /* Buffer set to null */
-  tb->buffer = NULL;
   return tb;
 }
 
@@ -170,10 +184,16 @@ Nothing
 */
 void table_close(table_t* table) {
   if(table == NULL) return;
-  /* Free buffer */
-  if(table->buffer != NULL) {
-    free(table->buffer);
+
+  int i;
+
+  for(i = 0; i < table->ncols; i++){
+    if(table->values[i] != NULL){
+      free(table->values[i]);
+    }
   }
+  free(table->values);
+
   /* Free types */
   if(table->types != NULL) {
     free(table->types);
