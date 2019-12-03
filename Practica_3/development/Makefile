@@ -10,24 +10,25 @@ OTHER_DIR=
 #
 # These are some things about the compiler
 #
-CC=gcc -c
+CC=gcc -c 
 LN=gcc
 
-CFLAGS=-O -I/usr/include -I$(UTIL_DIR) -I$(SOURCE_DIR)
+CFLAGS=-O -I/usr/include -I$(UTIL_DIR) -I$(SOURCE_DIR) 
 
 LFLAGS= -L/usr/lib/ -lm
 
 OPTFILES=
-INCLUDES=
+INCLUDES= 
 UTILFILES=
 ALLFILES=cmds.o index.o import.o table.o type.o
 LIBS=
 
-all: cmds.o index.o import.o table.o type.o main.o test
 
 #
 # Files for the configuration file functions
 #
+all: cmds.o index.o import.o table.o type.o main.o test
+
 cmds.o:	$(SOURCE_DIR)/cmds.c $(SOURCE_DIR)/cmds.h
 	$(CC) $(CFLAGS) $(SOURCE_DIR)/cmds.c
 
@@ -43,10 +44,11 @@ table.o:	$(SOURCE_DIR)/table.c $(SOURCE_DIR)/table.h
 type.o:	$(SOURCE_DIR)/type.c $(SOURCE_DIR)/type.h
 	$(CC) $(CFLAGS) $(SOURCE_DIR)/type.c
 
-main.o:	$(SOURCE_DIR)/main.c
+main.o:	$(SOURCE_DIR)/main.c 
 	$(CC) $(CFLAGS) $(SOURCE_DIR)/main.c
 
-
+clean:
+	rm -rf *.o
 
 #
 # Executable target

@@ -45,50 +45,72 @@ void simple_test(int argc, char **argv) {
   table_close(t);
 }
 
-void test2() {
-  table_t *table = NULL;
+void test_type() {
+  type_t types[4] = {INT, STR, LLONG, DBL};
+  char tstr[4][8] = {"INT", "STR", "LLONG", "DBL"};
+  int sizes[4] = {sizeof(int), sizeof(char)*5, sizeof(long long), sizeof(double)};
+  int a = 7;
+  char b[5] = "HOLA";
+  long long c = 1234567890;
+  double d = 3.1416;
+  int i;
+  char lit[3] = "77";
+  void *value = NULL;
 
-  table = table_open("test_tab.dat");
+  void* values[4] = {&a, &b, &c, &d};
 
-  int ncols = table_ncols(table);
-  type_t *tp = table_types(table);
-  long pos = table_first_pos(table);
-  int i, n = 7;
-  void *val = NULL;
-  void *values[2];
-
-  values[0] = (void*)&n;
-  values[1] = (void*)&n;
-
-  /*printf("%d, %d\n", *(int*)values[0], *(int*)values[1]);
-  table_close(table);
-  return;*/
-
-  if(table_insert_record(table, values) == 0) {
-    printf("%d, %d\n", *(int*)values[0], *(int*)values[1]);
-    table_close(table);
-    return;
-  }
-  while (pos > 0) {
-    pos = table_read_record(table, pos);
-    if(pos < 0) break;
-    printf("%ld (POS)\n", pos);
-    for (i = 0; i < table_ncols(table); i++){
-      val = table_get_col(table, i);
-      print_value(stdout, tp[i], val);
-      printf("  ");
+  for(i = 0; i < 4; i++){
+    if(value_length(types[i], values[i]) != sizes[i]) {
+      printf("Error en value_length\n");
     }
+    print_value(stdout, types[i], values[i]);
     printf("\n");
+
+    if(value_cmp(types[i], values[i], values[i]) != 0) {
+      printf("Error en value_cmp\n");
+    }
+    /**/
+    if(type_parse(tstr[i]) != types[i]) {
+        printf("Error en type_parse\n");
+    }
+    if(strcmp(type_to_str(types[i]), tstr[i]) != 0){
+        printf("Error en type_to_str\n");
+    }
+    value = value_parse(types[i], lit);
+    if(value == NULL) {
+      printf("Error en value_parse\n");
+    }
+    switch(types[i]) {
+      case INT:
+        if(*(int*)value != 77) {
+          printf("Error en value_parse\n");
+        }
+        break;
+      case LLONG:
+        if(*(long long*)value != 77) {
+          printf("Error en value_parse\n");
+        }
+        break;
+      case DBL:
+        if(*(double*)value != 77) {
+          printf("Error en value_parse\n");
+        }
+        break;
+      case STR:
+      if(strcmp(value, "77") != 0){
+        printf("Error en value_parse\n");
+      }
+      break;
+    }
   }
-  table_close(table);
 }
 
 
 int main(int argc, char **argv)
 {
   if (argc>1) {
-    simple_test(argc-1, argv+1);
-    test2();
+    /*simple_test(argc-1, argv+1);*/
+    test_type();
   }
   else {
     cmdstatus *cs = c_create();

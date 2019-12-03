@@ -8,7 +8,9 @@
 
 typedef enum {
     INT, /*integer*/
-    STR /*string*/
+    STR, /*string*/
+    LLONG, /*long long integers*/
+    DBL /*double*/
 } type_t;
 
 /* length in bytes of the value */
@@ -33,5 +35,8 @@ void* value_parse(type_t type, char* literal);
 
 /* Allocates and returns a string with the description of a type */
 char *type_to_str(type_t type);
+
+/* Sets the value from a buffer depending on the type */
+void* value_set(type_t type, char* buffer);
 
 #endif
