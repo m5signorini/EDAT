@@ -3,13 +3,23 @@
 #include <string.h>
 #include "index.h"
 
+typedef struct record_ {
+  int key;
+  int n_regs;
+  long* registers;
+} record;
+
 struct index_ {
+  FILE* file;
+  type_t type;
+  int n_keys;
+  record* entries;
 };
 
 
 
 
-/* 
+/*
    Function: int index_create(char *path, int type)
 
    Creates a file for saving an empty index. The index is initialized
@@ -25,15 +35,34 @@ struct index_ {
    0:   parameter error or file creation problem. Index not created.
  */
 int index_create(char *path, type_t type) {
-  return 0;
+  if(path == NULL || type != INT) return 0;
+  FILE* pf = NULL;
+  int n_entries = 0;
+
+  pf = fopen(path, "wb");
+  if(pf == NULL) {
+    return 0;
+  }
+
+  if(fwrite(&type, sizeof(type_t), 1, pf) != 1) {
+    fclose(pf);
+    return 0;
+  }
+  if(fwrite(&n_entries, sizeof(int), 1, pf) != 1) {
+    fclose(pf);
+    return 0;
+  }
+
+  fclose(pf);
+  return 1;
 }
 
 
 
-/* 
+/*
    Opens a previously created index: reads the contents of the index
    in an index_t structure that it allocates, and returns a pointer to
-   it (or NULL if the files doesn't exist or there is an error). 
+   it (or NULL if the files doesn't exist or there is an error).
 
    NOTE: the index is stored in memory, so you can open and close the
    file in this function. However, when you are asked to save the
@@ -43,7 +72,7 @@ int index_create(char *path, type_t type) {
    again).
 
    Parameters:
-   path:  the file where the index is 
+   path:  the file where the index is
 
    Returns:
    pt:   index opened
@@ -51,19 +80,89 @@ int index_create(char *path, type_t type) {
 
  */
 index_t* index_open(char* path) {
+  if(path == NULL) return 0;
   return NULL;
+
+    index_t* index = NULL;
+    int i;
+    int size;
+
+    index = (index_t*)malloc(sizeof(index_t));
+    if(index == NULL) {
+      return NULL;
+    }
+
+    index->file = fopen(path, "rb+");
+    if(index->file == NULL) {
+      free(index);
+      return NULL;
+    }
+
+    fseek(index->file, 0, SEEK_SET);
+
+    /* Get type from the file */
+    /*Vamos a guardar en tb->cols 1 cosa de tamaño int del file tb->file*/
+    if(fread(&index->type, sizeof(type_t), 1, index->file) != 1){
+      fclose(index->file);
+      free(index);
+      return NULL;
+    }
+
+    if(fread(&index->n_keys, sizeof(int), 1, index->file) != 1){
+      fclose(index->file);
+      free(index);
+      return NULL;
+    }
+
+
+    /*Read entries*/
+    if(index->n_keys == 0){
+      index->entries = NULL;
+      return index;
+    }
+
+    index->entries = (record*)malloc(index->n_keys*sizeof(record));
+    if(index->entries == NULL){
+      fclose(index->file);
+      free(index);
+      return NULL;
+    }
+    for(i = 0; i < index->n_keys; i++){
+      index->entries[i].registers = NULL;
+    }
+
+    for (i = 0; i < index->n_keys; i++){
+      if(fread(&(index->entries[i].key), sizeof(int), 1, index->file) != 1){
+        index_close(index);
+        }
+      if(fread(&(index->entries[i].n_regs), sizeof(int), 1, index->file) != 1){
+        index_close(index);
+      }
+      size = index->entries[i].n_regs;
+      index->entries[i].registers = (long*)malloc(size*sizeof(long));
+      if (index->entries[i].registers == NULL){
+        index_close(index);
+        return NULL;
+      }
+      if(fread(index->entries[i].registers, sizeof(long), size, index->file) != size){
+        index_close(index);
+        return NULL;
+      }
+    }
+
+    return index;
 }
 
 
-/* 
+/*
    int index_save(index_t* index);
 
    Saves the current state of index in the file it came from. Note
    that the name of the file in which the index is to be saved is not
-   given.  See the NOTE to index_open.  
+   given.  See the NOTE to index_open.
 
    Parameters:
-   index:  the index the function operates upon
+   index:  the index the function operatesreturn upon
 
    Returns:
    1:  index saved
@@ -75,7 +174,7 @@ int index_save(index_t* idx) {
 }
 
 
-/* 
+/*
    Function: int index_put(index_t *index, int key, long pos);
 
    Puts a pair key-position in the index. Note that the key may be
@@ -96,25 +195,77 @@ int index_save(index_t* idx) {
 
 */
 int index_put(index_t *idx, int key, long pos) {
-  return 0;
+  if (idx == NULL || pos < 0) return 0;
+
+  int P = 0;
+  int U = idx->n_keys - 1;
+  int m = 0, i;
+  int size = 0;
+
+  while (P <= U) {
+    m = (P + U)/2;
+    if (idx->entries[m].key == key){
+      /*Key found*/
+      size = idx->entries[m].n_regs;
+      /*Search pos*/
+      for (i = 0; i < size; i++){
+        /*Register already added*/
+        if (idx->entries[m].registers[i] == pos){
+          return 1;
+        }
+      }
+      /*Register not added previosly, so we add it*/
+      idx->entries[m].n_regs++;
+      idx->entries[m].registers = (long*)realloc(idx->entries[m].registers, idx->entries[m].n_regs*sizeof(long));
+      if (idx->entries[m].registers == NULL){
+        idx->entries[m].n_regs--;
+        return 0;
+      }
+    }
+    else if (key < idx->entries[m].key){
+      U = m - 1;
+    }
+    else {
+      P = m + 1;
+    }
+  }
+  /*Key not found, we add the key*/
+  idx->n_keys++;
+  idx->entries = (record*)realloc(idx->entries, idx->n_keys*sizeof(record));
+  if (idx->entries == NULL){
+    idx->n_keys--;
+    return 0;
+  }
+  /*We relocate all the keys*/
+  for(i = idx->n_keys - 1; i > m+1; i--){
+    idx->entries[i] = idx->entries[i-1];
+  }
+  idx->entries[i].registers = (long*)malloc(1*sizeof(long));
+  if(idx->entries[i].registers == NULL){
+    return 0;
+  }
+  idx->entries[i].key = key;
+  idx->entries[i].n_regs = 1;
+
+  return 1;
 }
 
 
-/* 
+/*
    Function: long *index_get(index_t *index, int key, int* nposs);
 
-   Retrieves all the positions associated with the key in the index. 
+   Retrieves all the positions associated with the key in the index.
 
    Parameters:
    index:  the index the function operates upon
    key: the key of the record to be searched
    nposs: output paramters: the number of positions associated to this key
-   
+
    Returns:
 
    pos: an array of *nposs long integers with the positions associated
         to this key
-   NULL: the key was not found   
+   NULL: the key was not found
 
    NOTE: the parameter nposs is not an array of integers: it is
    actually an integer variable that is passed by reference. In it you
@@ -137,13 +288,34 @@ int index_put(index_t *idx, int key, long pos) {
 
 */
 long *index_get(index_t *idx, int key, int* nposs) {
+  if (idx == NULL || nposs == NULL){
+    return NULL;
+  }
+  int P = 0;
+  int U = idx->n_keys - 1;
+  int m = 0;
+
+  while (P <= U) {
+   m = (P + U)/2;
+   if (idx->entries[m].key == key){
+     *nposs = idx->entries[m].n_regs;
+     return idx->entries[m].registers;
+   }
+   else if (key < idx->entries[m].key){
+     U = m - 1;
+   }
+   else{
+     P = m + 1;
+   }
+ }
+   *nposs = 0;
   return NULL;
 }
 
 
-/* 
+/*
    Closes the index by freeing the allocated resources. No operation
-   on the index will be possible after calling this function. 
+   on the index will be possible after calling this function.
 
    Parameters:
    index:  the index the function operates upon
@@ -155,6 +327,18 @@ long *index_get(index_t *idx, int key, int* nposs) {
    have to call the function index_save for this.
 */
 void index_close(index_t *idx) {
+  if (idx == NULL) return;
+  int i;
+
+  for(i = 0; i < idx->n_keys; i++){
+    if (idx->entries[i].registers != NULL){
+      free(idx->entries[i].registers);
+    }
+  }
+  free(idx->entries);
+  fclose(idx->file);
+  free(idx);
+
   return;
 }
 
@@ -169,18 +353,18 @@ void index_close(index_t *idx) {
    Parameters:
    index:  the index the function operates upon
    n: number of the record to be returned
-   nposs: output paramters: the number of positions associated to this key
-   
+   key: output parameter: the key of the record
+   nposs: output parameter: the number of positions associated to this key
+
    Returns:
 
    pos: an array of *nposs long integers with the positions associated
         to this key
-   NULL: the key was not found   
+   NULL: the key was not found
 
 
    See index_get for explanation on nposs and pos: they are the same stuff
 */
-long *index_get_order(index_t *idx, int n, int* nposs) {
+long *index_get_order(index_t *index, int n, int *key, int* nposs) {
   return NULL;
 }
-
