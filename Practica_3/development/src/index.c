@@ -5,7 +5,7 @@
 
 typedef struct record_ {
   int key;
-  int n_regs;
+  int n_regs;  /* Number of registers associated to this key */
   long* registers;
 } record;
 
@@ -30,7 +30,7 @@ struct index_ {
    path:  the file where the index is to be created
    type:  the type of the index (always INT in this version)
 
-   Returns:
+   Returns:  return NULL;
    1:   index created
    0:   parameter error or file creation problem. Index not created.
  */
@@ -80,77 +80,83 @@ int index_create(char *path, type_t type) {
 
  */
 index_t* index_open(char* path) {
-  if(path == NULL) return 0;
-  return NULL;
+  if(path == NULL) return NULL;
+  if(path == NULL) return NULL;
 
-    index_t* index = NULL;
-    int i;
-    int size;
+  index_t* index = NULL;
+  int i;
+  int size;
 
-    index = (index_t*)malloc(sizeof(index_t));
-    if(index == NULL) {
-      return NULL;
-    }
+  index = (index_t*)malloc(sizeof(index_t));
+  if(index == NULL) {
+    return NULL;
+  }
 
-    index->file = fopen(path, "rb+");
-    if(index->file == NULL) {
-      free(index);
-      return NULL;
-    }
+  index->file = fopen(path, "rb+");
+  if(index->file == NULL) {
+    free(index);
+    return NULL;
+  }
 
-    fseek(index->file, 0, SEEK_SET);
+  fseek(index->file, 0, SEEK_SET);
 
-    /* Get type from the file */
-    /*Vamos a guardar en tb->cols 1 cosa de tamaño int del file tb->file*/
-    if(fread(&index->type, sizeof(type_t), 1, index->file) != 1){
-      fclose(index->file);
-      free(index);
-      return NULL;
-    }
+  /* Get type from the file */
+  if(fread(&index->type, sizeof(type_t), 1, index->file) != 1){
+    fclose(index->file);
+    free(index);
+    return NULL;
+  }
+  /* Get n_keys from the file */
+  if(fread(&index->n_keys, sizeof(int), 1, index->file) != 1){
+    fclose(index->file);
+    free(index);
+    return NULL;
+  }
 
-    if(fread(&index->n_keys, sizeof(int), 1, index->file) != 1){
-      fclose(index->file);
-      free(index);
-      return NULL;
-    }
-
-
-    /*Read entries*/
-    if(index->n_keys == 0){
-      index->entries = NULL;
-      return index;
-    }
-
-    index->entries = (record*)malloc(index->n_keys*sizeof(record));
-    if(index->entries == NULL){
-      fclose(index->file);
-      free(index);
-      return NULL;
-    }
-    for(i = 0; i < index->n_keys; i++){
-      index->entries[i].registers = NULL;
-    }
-
-    for (i = 0; i < index->n_keys; i++){
-      if(fread(&(index->entries[i].key), sizeof(int), 1, index->file) != 1){
-        index_close(index);
-        }
-      if(fread(&(index->entries[i].n_regs), sizeof(int), 1, index->file) != 1){
-        index_close(index);
-      }
-      size = index->entries[i].n_regs;
-      index->entries[i].registers = (long*)malloc(size*sizeof(long));
-      if (index->entries[i].registers == NULL){
-        index_close(index);
-        return NULL;
-      }
-      if(fread(index->entries[i].registers, sizeof(long), size, index->file) != size){
-        index_close(index);
-        return NULL;
-      }
-    }
-
+  /* READ ENTRIES */
+  if(index->n_keys == 0) {
+    index->entries = NULL;
     return index;
+  }
+
+  index->entries = (record*)malloc(index->n_keys*sizeof(record));
+  if(index->entries == NULL) {
+    fclose(index->file);
+    free(index);
+    return NULL;
+  }
+
+  /* Set to null for easier erasing */
+  for(i = 0; i < index->n_keys; i++) {
+    index->entries[i].registers = NULL;
+  }
+
+  /* Add the entries */
+  for(i = 0; i < index->n_keys; i++) {
+    /* Read key */
+    if(fread(&(index->entries[i].key), sizeof(int), 1, index->file) != 1) {
+      index_close(index);
+      return NULL;
+    }
+    /* Read n_regs */
+    if(fread(&(index->entries[i].n_regs), sizeof(int), 1, index->file) != 1) {
+      index_close(index);
+      return NULL;
+    }
+    /* Read registers */
+    size = index->entries[i].n_regs;
+    index->entries[i].registers = (long*)malloc(size*sizeof(long));
+    if(index->entries[i].registers == NULL) {
+      index_close(index);
+      return NULL;
+    }
+    if(fread(index->entries[i].registers, sizeof(long), size, index->file) != size) {
+      index_close(index);
+      return NULL;
+    }
+  }
+
+  return index;
 }
 
 
@@ -162,15 +168,48 @@ index_t* index_open(char* path) {
    given.  See the NOTE to index_open.
 
    Parameters:
-   index:  the index the function operatesreturn upon
+   index:  the index the function operates upon
 
    Returns:
    1:  index saved
-   0:  error saving the index (cound not open file)
+   0:  error saving the index (cound not open file) [][m][*][m+1][T][L]
 
 */
 int index_save(index_t* idx) {
-  return 0;
+  if(idx == NULL) return 0;
+  int i;
+
+  fseek(idx->file, 0, SEEK_SET);
+
+  if(fwrite(&idx->type, sizeof(type_t), 1, idx->file) != 1) {
+    index_close(idx);
+    return 0;
+  }
+  if(fwrite(&idx->n_keys, sizeof(int), 1, idx->file) != 1) {
+    index_close(idx);
+    return 0;
+  }
+
+  /* Add the entries */
+  for(i = 0; i < idx->n_keys; i++) {
+    /* Write key */
+    if(fwrite(&(idx->entries[i].key), sizeof(int), 1, idx->file) != 1) {
+      index_close(idx);
+      return 0;
+    }
+    /* Write n_regs */
+    if(fwrite(&(idx->entries[i].n_regs), sizeof(int), 1, idx->file) != 1) {
+      index_close(idx);
+      return 0;
+    }
+    /* Write registers */
+    if(fwrite(idx->entries[i].registers, sizeof(long), idx->entries[i].n_regs, idx->file) != idx->entries[i].n_regs) {
+      index_close(idx);
+      return 0;
+    }
+  }
+
+  return 1;
 }
 
 
@@ -204,14 +243,14 @@ int index_put(index_t *idx, int key, long pos) {
 
   while (P <= U) {
     m = (P + U)/2;
+    /*Key found*/
     if (idx->entries[m].key == key){
-      /*Key found*/
       size = idx->entries[m].n_regs;
       /*Search pos*/
       for (i = 0; i < size; i++){
         /*Register already added*/
         if (idx->entries[m].registers[i] == pos){
-          return 1;
+          return idx->n_keys;
         }
       }
       /*Register not added previosly, so we add it*/
@@ -221,6 +260,8 @@ int index_put(index_t *idx, int key, long pos) {
         idx->entries[m].n_regs--;
         return 0;
       }
+      idx->entries[m].registers[idx->entries[m].n_regs] = pos;
+      return idx->n_keys;
     }
     else if (key < idx->entries[m].key){
       U = m - 1;
@@ -246,8 +287,9 @@ int index_put(index_t *idx, int key, long pos) {
   }
   idx->entries[i].key = key;
   idx->entries[i].n_regs = 1;
+  idx->entries[i].registers[0] = pos;
 
-  return 1;
+  return idx->n_keys;
 }
 
 
@@ -288,27 +330,28 @@ int index_put(index_t *idx, int key, long pos) {
 
 */
 long *index_get(index_t *idx, int key, int* nposs) {
-  if (idx == NULL || nposs == NULL){
-    return NULL;
-  }
-  int P = 0;
-  int U = idx->n_keys - 1;
-  int m = 0;
+  if(idx == NULL || nposs == NULL) return NULL;
 
+  int P = 0;
+  int U = idx->n_keys-1;
+  int m;
+  /* Binary Search */
   while (P <= U) {
-   m = (P + U)/2;
-   if (idx->entries[m].key == key){
-     *nposs = idx->entries[m].n_regs;
-     return idx->entries[m].registers;
-   }
-   else if (key < idx->entries[m].key){
-     U = m - 1;
-   }
-   else{
-     P = m + 1;
-   }
- }
-   *nposs = 0;
+    m = (P + U)/2;
+    /* Key found */
+    if (idx->entries[m].key == key){
+      *nposs = idx->entries[m].n_regs;
+      return idx->entries[m].registers;
+    }
+    /* Continue search */
+    else if (key < idx->entries[m].key){
+      U = m - 1;
+    }
+    else {
+      P = m + 1;
+    }
+  }
+  *nposs = 0;
   return NULL;
 }
 
@@ -327,24 +370,23 @@ long *index_get(index_t *idx, int key, int* nposs) {
    have to call the function index_save for this.
 */
 void index_close(index_t *idx) {
-  if (idx == NULL) return;
+  if(idx == NULL) return;
   int i;
 
-  for(i = 0; i < idx->n_keys; i++){
-    if (idx->entries[i].registers != NULL){
+  for(i = 0; i < idx->n_keys; i++) {
+    if(idx->entries[i].registers != NULL) {
       free(idx->entries[i].registers);
     }
   }
   free(idx->entries);
   fclose(idx->file);
   free(idx);
-
   return;
 }
 
 
 /*
-  Function: long **index_get_order(index_t *index, int n, int* nposs);
+  Function: long *index_get_order(index_t *index, int n, int* nposs);
 
   Function useful for debugging but that should not be used otherwise:
   returns the nth record in the index. DO NOT USE EXCEPT FOR
