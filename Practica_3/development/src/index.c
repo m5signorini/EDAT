@@ -260,7 +260,7 @@ int index_put(index_t *idx, int key, long pos) {
         idx->entries[m].n_regs--;
         return 0;
       }
-      idx->entries[m].registers[idx->entries[m].n_regs] = pos;
+      idx->entries[m].registers[idx->entries[m].n_regs-1] = pos;
       return idx->n_keys;
     }
     else if (key < idx->entries[m].key){
@@ -270,6 +270,8 @@ int index_put(index_t *idx, int key, long pos) {
       P = m + 1;
     }
   }
+  m = P;
+
   /*Key not found, we add the key*/
   idx->n_keys++;
   idx->entries = (record*)realloc(idx->entries, idx->n_keys*sizeof(record));
@@ -277,11 +279,12 @@ int index_put(index_t *idx, int key, long pos) {
     idx->n_keys--;
     return 0;
   }
-  /*We relocate all the keys*/
-  for(i = idx->n_keys - 1; i > m+1; i--){
+  /*We relocate all the keys, m is new key position*/
+  for(i = idx->n_keys - 1; i > m; i--){
     idx->entries[i] = idx->entries[i-1];
+    printf("%ld\n", idx->entries[i].registers[0]);
   }
-  idx->entries[i].registers = (long*)malloc(1*sizeof(long));
+  idx->entries[i].registers = (long*)malloc(sizeof(long));
   if(idx->entries[i].registers == NULL){
     return 0;
   }
@@ -408,5 +411,8 @@ void index_close(index_t *idx) {
    See index_get for explanation on nposs and pos: they are the same stuff
 */
 long *index_get_order(index_t *index, int n, int *key, int* nposs) {
-  return NULL;
+  if(index == NULL || n < 0 || n >= index->n_keys || key == NULL || nposs == NULL) return NULL;
+  *key = index->entries[n].key;
+  *nposs = index->entries[n].n_regs;
+  return index->entries[n].registers;
 }

@@ -14,11 +14,11 @@ Code, Compile, Run and Debug online from anywhere in world.
 #include "type.h"
 
 /*
-    Simple test: receives a command line such as 
-    
+    Simple test: receives a command line such as
+
         3 INT STR int
-        
-    Creates a table with thiose columns and types, opens it, 
+
+    Creates a table with thiose columns and types, opens it,
     and prints some information about it.
 */
 void simple_test(int argc, char **argv) {
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     }
     else {
         cmdstatus *cs = c_create();
-    
+
         c_key_init(cs);
         c_print_status(cs);
         while(1) {
@@ -70,11 +70,10 @@ int main(int argc, char **argv)
 		c_close(cs);
                 printf("bye!\n");
                 exit(0);
-            }            
+            }
             c_execute(cs, cmd);
             c_print_status(cs);
         }
     }
-    return 0;  
+    return 0;
 }
-
