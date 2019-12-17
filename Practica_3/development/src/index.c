@@ -282,7 +282,6 @@ int index_put(index_t *idx, int key, long pos) {
   /*We relocate all the keys, m is new key position*/
   for(i = idx->n_keys - 1; i > m; i--){
     idx->entries[i] = idx->entries[i-1];
-    printf("%ld\n", idx->entries[i].registers[0]);
   }
   idx->entries[i].registers = (long*)malloc(sizeof(long));
   if(idx->entries[i].registers == NULL){
